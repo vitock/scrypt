@@ -122,9 +122,9 @@ public class Salsa20 {
     static private func printStrm(_ strm:inout [UInt8]){
         print("---Stream Buff >>>>> ")
         strm.withUnsafeBytes { bf  in
-            let pStrm = bf.baseAddress!.bindMemory(to: UInt32.self, capacity: 16);
-            
-            for i in 0..<4{
+            let pStrm = bf.baseAddress!.bindMemory(to: UInt32.self, capacity:bf.count/4);
+            let Count = bf.count / 16
+            for i in 0..<Count{
                 
                 let S = String(format: "%08x,%08x,%08x,%08x",pStrm[0 + i * 4],pStrm[1 + i * 4],pStrm[2 + i * 4],pStrm[3 + i * 4] )
                 
@@ -164,7 +164,6 @@ public class Salsa20 {
                             }
                         }
                     }
-                    
                 }
             };
         }
@@ -335,6 +334,9 @@ public class Salsa20 {
                     salsa20_block(out: &strmOut, stream: &strm,tmpStrm: &strmTmp);
                 }
                 
+                
+                
+                
                 msg.withUnsafeBytes { bfMsg  in
                     for j in 0..<remain{
                         let indexOfMsg = r * 64 + j;
@@ -348,23 +350,19 @@ public class Salsa20 {
     
     
     static func test(){
-        
         var key = "12345678901234567890123456789012".map {$0.asciiValue!};
-        var nonce = "123456781234567812345678".map {$0.asciiValue!};
-       
-   
-        let txt = "hello worldhello worldhello worldhello worldhello worldhello worldhello worldhello worldhello worldhello worldhello worldhello worldhello worldhello worldhello worldhello worldhello worldhello worldhello worldhello worldhello worldhello worldhello worldhello worldhello worldhello world"
+        let nonce32 = "123456781234567812345678".map {$0.asciiValue!};
+        let nonce8 = "12345670".map {$0.asciiValue!};
+        var nonce = nonce32;
+        
+        let txt = "Say las va te lo worldhello worldhello worldhello worldhello worldhello worldhello worldhello world"
         var data = txt.data(using: .utf8)!;
-        
         var dataKey = Data(bytes: &key, count: key.count);
-        
         var outData : Data?;
-        
         try! sa_crypt(msg: &data, keyData: &dataKey, outData: &outData, nonce: &nonce);
         
         var outData2 : Data?;
-        try? sa_crypt(msg: &outData!, keyData: &dataKey, outData: &outData2, nonce: &nonce);
-        
+        try! sa_crypt(msg: &outData!, keyData: &dataKey, outData: &outData2, nonce: &nonce);
         let s = String(data: outData2!, encoding: .utf8)!;
         print("result",s == txt)
         print("result",outData!.base64EncodedString())
@@ -373,7 +371,6 @@ public class Salsa20 {
         var bf1 = [UInt8](repeating: 0, count: 9);
         UInt64ToUint8Array(idx: 0xff00ff0001, bf: &bf1);
         print(bf1)
-        
         
     }
     

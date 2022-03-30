@@ -39,6 +39,7 @@
 		C49B281827F1A000003CC735 /* salsa20.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = salsa20.swift; sourceTree = "<group>"; };
 		C49B281E27F1A2D7003CC735 /* x */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = x; sourceTree = BUILT_PRODUCTS_DIR; };
 		C49B282027F1A2D7003CC735 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		C4CCDE0827F440A50033E758 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
 		F4AC56D96B0205FA176CDB45 /* Pods_x.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_x.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -113,6 +114,7 @@
 		DE5CE953283620199D6DB306 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				C4CCDE0827F440A50033E758 /* Accelerate.framework */,
 				232CCFAE4FED6F7AC5FDE2AE /* Pods_Scrypt.framework */,
 				F4AC56D96B0205FA176CDB45 /* Pods_x.framework */,
 			);
