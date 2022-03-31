@@ -12,6 +12,8 @@
 		C49B281227F19FE1003CC735 /* Scrypt.h in Headers */ = {isa = PBXBuildFile; fileRef = C49B281127F19FE1003CC735 /* Scrypt.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		C49B281927F1A000003CC735 /* salsa20.swift in Sources */ = {isa = PBXBuildFile; fileRef = C49B281827F1A000003CC735 /* salsa20.swift */; };
 		C49B282127F1A2D7003CC735 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = C49B282027F1A2D7003CC735 /* main.swift */; };
+		C4CCDE0B27F465D10033E758 /* Scrypt.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4CCDE0A27F465D10033E758 /* Scrypt.swift */; };
+		C4CCDE0C27F465D10033E758 /* Scrypt.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4CCDE0A27F465D10033E758 /* Scrypt.swift */; };
 		ED9BA8E1193D3469CD709FD9 /* Pods_x.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4AC56D96B0205FA176CDB45 /* Pods_x.framework */; };
 		FBD971AF0A0AC8B87E1BC064 /* Pods_Scrypt.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 232CCFAE4FED6F7AC5FDE2AE /* Pods_Scrypt.framework */; };
 /* End PBXBuildFile section */
@@ -40,6 +42,7 @@
 		C49B281E27F1A2D7003CC735 /* x */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = x; sourceTree = BUILT_PRODUCTS_DIR; };
 		C49B282027F1A2D7003CC735 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		C4CCDE0827F440A50033E758 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
+		C4CCDE0A27F465D10033E758 /* Scrypt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Scrypt.swift; sourceTree = "<group>"; };
 		F4AC56D96B0205FA176CDB45 /* Pods_x.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_x.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -99,6 +102,7 @@
 			children = (
 				C49B281127F19FE1003CC735 /* Scrypt.h */,
 				C49B281827F1A000003CC735 /* salsa20.swift */,
+				C4CCDE0A27F465D10033E758 /* Scrypt.swift */,
 			);
 			path = Scrypt;
 			sourceTree = "<group>";
@@ -273,6 +277,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C4CCDE0B27F465D10033E758 /* Scrypt.swift in Sources */,
 				C49B281927F1A000003CC735 /* salsa20.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -281,6 +286,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C4CCDE0C27F465D10033E758 /* Scrypt.swift in Sources */,
 				C4564B9427F294190093EF15 /* salsa20.swift in Sources */,
 				C49B282127F1A2D7003CC735 /* main.swift in Sources */,
 			);

@@ -349,6 +349,32 @@ public class Salsa20 {
     }
     
     
+    static func sa_hash(msg64:inout [UInt8],out64:inout[UInt8]){
+        
+        
+        var strm = [UInt8](repeating: 0, count: 64);
+        var strmOut = [UInt8](repeating: 0, count: 64);
+        var strmTmp = [UInt8](repeating: 0, count: 64);
+        
+        
+        _ = msg64.withUnsafeBytes { bf  in
+            strm.withUnsafeMutableBytes { bf2  in
+                memcpy(bf2.baseAddress, bf.baseAddress, bf.count)
+            }
+        }
+        
+        salsa20_block(out: &strmOut, stream: &strm, tmpStrm: &strmTmp)
+        
+        _ = out64.withUnsafeMutableBytes { bf  in
+            strmOut.withUnsafeBytes { bf0 in
+                memcpy(bf.baseAddress, bf0.baseAddress, bf.count)
+            }
+        }
+        
+        
+    }
+    
+    
     static func test(){
         var key = "12345678901234567890123456789012".map {$0.asciiValue!};
         let nonce32 = "123456781234567812345678".map {$0.asciiValue!};
@@ -370,7 +396,31 @@ public class Salsa20 {
          
         var bf1 = [UInt8](repeating: 0, count: 9);
         UInt64ToUint8Array(idx: 0xff00ff0001, bf: &bf1);
-        print(bf1)
+        
+        
+        
+        
+        
+        
+//            var msg = [uint8](repeating: 1, count: 64)
+        
+        var msg = [0xce,0xbd,0x3c,0x29,0xa3,0xec,0xf6,0xaa,0x54,0x31,0x2b,0x3f,0x41,0x0e,0x1a,0x5f,
+        0x41,0x0e,0x1a,0x5f,0xce,0xbd,0x3c,0x29,0xa3,0xec,0xf6,0xaa,0x54,0x31,0x2b,0x3f,
+        0x54,0x31,0x2b,0x3f,0x41,0x0e,0x1a,0x5f,0xce,0xbd,0x3c,0x29,0xa3,0xec,0xf6,0xaa,
+        0xa3,0xec,0xf6,0xaa,0x54,0x31,0x2b,0x3f,0x41,0x0e,0x1a,0x5f,0xce,0xbd,0x3c,0x29] as [UInt8]
+        
+        
+        
+        
+        
+        
+            var hsh = [uint8](repeating: 0, count: 64)
+        sa_hash(msg64: &msg , out64: &hsh);
+        
+        printStrm(&hsh)
+        
+        
+        
         
     }
     
