@@ -370,30 +370,53 @@ public class Salsa20 {
     }
     
     
-    static func sa_hash(msg64:inout [UInt8],out64:inout[UInt8]){
-        var bfall = [UInt8](repeating: 0, count: 192);
+    
+    static func sa_hash(msg32:inout [UInt8],out32:inout[UInt8]){
+        var bfall = [UInt8](repeating: 0, count: 208);
         bfall.withUnsafeMutableBufferPointer { bf  in
-            var strm = UnsafeMutableBufferPointer(start:bf.baseAddress?.advanced(by: 0), count: 64);
-            
-            var strmOut = UnsafeMutableBufferPointer(start:bf.baseAddress?.advanced(by: 64), count: 64);
-            
-            var strmTmp = UnsafeMutableBufferPointer(start:bf.baseAddress?.advanced(by: 128), count: 64);
-            _ = msg64.withUnsafeBytes { bf  in
-                memcpy(strm.baseAddress, bf.baseAddress, bf.count)
+            msg32.withUnsafeMutableBufferPointer {bfKey in
+                var strm = UnsafeMutableBufferPointer(start:bf.baseAddress?.advanced(by: 0), count: 64);
+                
+                var strmOut = UnsafeMutableBufferPointer(start:bf.baseAddress?.advanced(by: 64), count: 64);
+                
+                var strmTmp = UnsafeMutableBufferPointer(start:bf.baseAddress?.advanced(by: 128), count: 64);
+                
+                var nonce8_1 = UnsafeMutableBufferPointer(start:bf.baseAddress?.advanced(by: 192), count: 8);
+                var nonce8_2 = UnsafeMutableBufferPointer(start:bf.baseAddress?.advanced(by: 200), count: 8);
+                
+                initStream(strm: &strm, key: &bfKey, nonce: &nonce8_1, indexLittleEndian: &nonce8_2)
+                salsa20_block(out: &strmOut, stream: &strm, tmpStrm: &strmTmp)
+                
+                
+//              choose Uint32  0, 5, 10, 15, 6, 7, 8, 9  without last
+                strmTmp.withUnsafeBytes { bfTmp in
+                    let bfTmp32 = bfTmp.baseAddress!.bindMemory(to: UInt32.self, capacity: 16);
+                    out32.withUnsafeMutableBytes { bfOut in
+                        let bfOut32 = bfOut.baseAddress!.bindMemory(to: UInt32.self, capacity: 8)
+                        bfOut32[0] = bfTmp32[0];
+                        bfOut32[1] = bfTmp32[5];
+                        bfOut32[2] = bfTmp32[10];
+                        bfOut32[3] = bfTmp32[15];
+                        bfOut32[4] = bfTmp32[6];
+                        bfOut32[5] = bfTmp32[7];
+                        bfOut32[6] = bfTmp32[8];
+                        bfOut32[7] = bfTmp32[9];
+                    }
+                    
+                }
+                /// choose Uint32  0, 5, 10, 15, 6, 7, 8, 9  without last
             }
-            salsa20_block(out: &strmOut, stream: &strm, tmpStrm: &strmTmp)
-            _ = out64.withUnsafeMutableBytes { bf  in
-                memcpy(bf.baseAddress, strmOut.baseAddress, bf.count)
-            }
+            
+            
         }
     }
     
     
     static func test(){
         var key = "12345678901234567890123456789012".map {$0.asciiValue!};
-        let nonce32 = "123456781234567812345678".map {$0.asciiValue!};
-        let nonce8 = "12345678".map {$0.asciiValue!};
-        var nonce = nonce32;
+        var nonce32 = "123456781234567812345678".map {$0.asciiValue!};
+        var nonce8 = "12345678".map {$0.asciiValue!};
+        var nonce = nonce8;
         
         let txt = "lo worldhello worldhello worldhello worldhello worldhello worldhello worldhello world我lo worldhello worldhello worldhello worldhello worldhello worldhello worldhello world"
         var data = txt.data(using: .utf8)!;
@@ -409,6 +432,11 @@ public class Salsa20 {
         print("result",s )
         print("result",outData.base64EncodedString())
          
+        var msg32 = [UInt8](repeating: 0, count: 32);
+        var msg32out = [UInt8](repeating: 0, count: 32);
+        sa_hash(msg32: &msg32 , out32: &msg32out);
+        print(msg32out)
+        
         
     }
     
