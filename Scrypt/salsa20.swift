@@ -6,38 +6,121 @@
 //
 
 import Foundation
+import QuartzCore
 
 public enum SaError:Error{
     case NonceLengthError
-    case preallocMemSizeNot272
+    case keyLengthNot32
 }
 
-@inline(__always) private func ROTL(a:UInt32,b:UInt32) -> UInt32{
-    return (a << b) | (a >> (32-b))
-}
-@inline(__always) private func QR(_ a: inout UInt32,_ b:inout UInt32,_ c:inout UInt32,_ d:inout UInt32)  {
-    b ^= ROTL(a: a &+ d , b: 7);
-    c ^= ROTL(a: b &+ a , b: 9);
-    d ^= ROTL(a: c &+ b , b: 13);
-    a ^= ROTL(a: d &+ c , b: 18);
-}
-
-
-
-
-public class Salsa20 {
+public class Salsa20{
+    @inline(__always) private func ROTL(a:UInt32,b:UInt32) -> UInt32{
+        return (a << b) | (a >> (32-b))
+    }
+    @inline(__always) private func QR(_ a: inout UInt32,_ b:inout UInt32,_ c:inout UInt32,_ d:inout UInt32)  {
+        b ^= ROTL(a: a &+ d , b: 7);
+        c ^= ROTL(a: b &+ a , b: 9);
+        d ^= ROTL(a: c &+ b , b: 13);
+        a ^= ROTL(a: d &+ c , b: 18);
+    }
+    
     
     typealias SaBuffer = UnsafeMutableBufferPointer<UInt8>
     
-    @inline(__always) static func UInt64ToUint8Array(idx:UInt64,bf:inout SaBuffer){
-        var idx0 = idx.littleEndian;
-        _ = withUnsafeBytes(of: &idx0) { bf1  in
-            memcpy(bf.baseAddress , bf1.baseAddress, 8);
+    private let _encBfSpace:UnsafeMutablePointer<UInt8>
+    private var encBuffer:SaBuffer
+    
+    
+    private var nextBlockCount:UInt64;
+    private var nextPostion:UInt64;
+    
+    private var keyArrary:[UInt8];
+    private var nonceArray:[UInt8];
+    private let isEncryptMode:Int
+    
+    
+    private var strm:SaBuffer;
+    private var strmOut:SaBuffer;
+    private var strmTmp:SaBuffer;
+    private var key:SaBuffer;
+    private var key32Tmp:SaBuffer;
+    private var idxBf8:SaBuffer;
+    private var nonce8:SaBuffer;
+    
+    
+    
+    private var nonce8_hash1:SaBuffer;
+    private var nonce8_hash2:SaBuffer;
+    private var msg32_hash:SaBuffer;
+    
+    
+    
+    init(key:[UInt8],nonce:[UInt8], isEncryptMode:Int = 1) throws {
+        guard nonce.count == 8 || nonce.count == 24  else{
+            throw SaError.NonceLengthError;
+        }
+        guard key.count == 32  else{
+            throw SaError.keyLengthNot32;
         }
         
+        nextPostion = 0;
+        nextBlockCount = 0;
+        self.isEncryptMode = isEncryptMode;
+        let BufferCount = 320;
+        
+        _encBfSpace = UnsafeMutablePointer<UInt8>.allocate(capacity: BufferCount)
+        
+        encBuffer = UnsafeMutableBufferPointer<UInt8>(start: _encBfSpace, count: BufferCount);
+        keyArrary = key;
+        nonceArray = nonce;
+        
+        
+        
+        var startPostion = 0;
+        strm = UnsafeMutableBufferPointer(start:encBuffer.baseAddress, count: 64);
+        
+        startPostion += strm.count;
+        strmOut = UnsafeMutableBufferPointer(start:encBuffer.baseAddress?.advanced(by: startPostion), count: 64);
+        
+        startPostion += strmOut.count;
+        strmTmp = UnsafeMutableBufferPointer(start:encBuffer.baseAddress?.advanced(by: startPostion), count: 64);
+        
+        startPostion += strmTmp.count;
+        self.key = UnsafeMutableBufferPointer(start:encBuffer.baseAddress?.advanced(by: startPostion), count: 32);
+        
+        startPostion += key.count;
+        key32Tmp = UnsafeMutableBufferPointer(start:encBuffer.baseAddress?.advanced(by: startPostion), count: 32);
+        
+        startPostion += key32Tmp.count;
+        idxBf8 = UnsafeMutableBufferPointer(start:encBuffer.baseAddress?.advanced(by: startPostion), count: 8);
+        
+        startPostion += idxBf8.count;
+        nonce8 = UnsafeMutableBufferPointer(start:encBuffer.baseAddress?.advanced(by: startPostion), count: 8);
+        startPostion += nonce8.count
+        
+        nonce8_hash1 = UnsafeMutableBufferPointer(start:encBuffer.baseAddress?.advanced(by: startPostion), count: 8);
+        startPostion += nonce8_hash1.count
+        
+        nonce8_hash2 = UnsafeMutableBufferPointer(start:encBuffer.baseAddress?.advanced(by: startPostion), count: 8);
+        startPostion += nonce8_hash2.count
+        
+        msg32_hash  = UnsafeMutableBufferPointer(start:encBuffer.baseAddress?.advanced(by: startPostion), count: 8);
+        startPostion += msg32_hash.count
+        
+        
+        
+        for i in 0..<8{
+            nonce8[i] = nonceArray[i];
+        }
+        
+        keyArrary.withUnsafeBytes { bf  in
+            let p = bf.baseAddress?.bindMemory(to: UInt8.self, capacity: key.count);
+            memcpy(self.key.baseAddress , p , key.count);
+            memcpy(key32Tmp.baseAddress , p , key.count);
+        }
     }
     
-    @inline(__always) static func initStream(strm:inout SaBuffer,key:inout SaBuffer,nonce:inout SaBuffer,indexLittleEndian:inout SaBuffer){
+    @inline(__always) func initStream(strm:inout SaBuffer,key:inout SaBuffer,nonce:inout SaBuffer,indexLittleEndian:inout SaBuffer){
         // fill the constant "expand 32-byte k"
         // https://en.wikipedia.org/wiki/Salsa20
         strm[0] = 0x65;
@@ -76,17 +159,9 @@ public class Salsa20 {
             strm[32+j] = indexLittleEndian[j]
         }
         
-        //        var idx = index.littleEndian;
-        //        withUnsafeBytes(of: &idx) { bf  in
-        //            let p = bf.baseAddress!.bindMemory(to: UInt8.self, capacity: 64);
-        //            for j  in 0..<8 {
-        //                strm[32+j] = p[j]
-        //            }
-        //        }
-        
     }
     
-    @inline(__always) static   func salsa20_block(out:inout SaBuffer,stream:inout SaBuffer,tmpStrm:inout SaBuffer,ROUNDS:Int = 20){
+    @inline(__always) private func salsa20_block(out:inout SaBuffer,stream:inout SaBuffer,tmpStrm:inout SaBuffer,ROUNDS:Int = 20){
         
         memcpy(tmpStrm.baseAddress, stream.baseAddress, tmpStrm.count);
         
@@ -117,79 +192,7 @@ public class Salsa20 {
         }
     }
     
-    
-    
-    static private func printStrm(_ strm:inout [UInt8]){
-        print("---Stream Buff >>>>> ")
-        strm.withUnsafeBytes { bf  in
-            let pStrm = bf.baseAddress!.bindMemory(to: UInt32.self, capacity:bf.count/4);
-            let Count = bf.count / 16
-            for i in 0..<Count{
-                
-                let S = String(format: "%08x,%08x,%08x,%08x",pStrm[0 + i * 4],pStrm[1 + i * 4],pStrm[2 + i * 4],pStrm[3 + i * 4] )
-                
-                print(S);
-            }
-            
-        }
-    }
-    
-    static private func printU32Box(pStrm:UnsafePointer<UInt32>,line:Int = #line){
-        print("--->> U32Box \(line)")
-        for i in 0..<4{
-            let S = String(format: "%08x,%08x,%08x,%08x",pStrm[0 + i * 4],pStrm[1 + i * 4],pStrm[2 + i * 4],pStrm[3 + i * 4] )
-            
-            print(S);
-        }
-    }
-    
-    static var rnd = SystemRandomNumberGenerator();
-    public static func randomize(_ buffer:inout [UInt8]){
-        
-        let bytePerRandomElement = 8;
-        let round = buffer.count / bytePerRandomElement ;
-        let remain = buffer.count % bytePerRandomElement ;
-        
-        for i in 0..<round{
-            var randNum = rnd.next();
-            var randNum2 = rnd.next();
-            
-            withUnsafePointer(to: &randNum) { bf in
-                bf.withMemoryRebound(to: UInt8.self, capacity: bytePerRandomElement) { p  in
-                    
-                    withUnsafePointer(to: &randNum2) { bf2 in
-                        bf2.withMemoryRebound(to: UInt8.self, capacity: bytePerRandomElement) { p2  in
-                            for j in 0..<bytePerRandomElement{
-                                buffer[i * bytePerRandomElement + j] = p[j] ^ p2[bytePerRandomElement - j - 1]
-                            }
-                        }
-                    }
-                }
-            };
-        }
-        
-        var randNum = rnd.next();
-        var randNum2 = rnd.next();
-        withUnsafePointer(to: &randNum) { bf in
-            bf.withMemoryRebound(to: UInt8.self, capacity: bytePerRandomElement) { p  in
-                withUnsafePointer(to: &randNum2) { bf2 in
-                    bf2.withMemoryRebound(to: UInt8.self, capacity: bytePerRandomElement) { p2  in
-                        for j in 0..<remain{
-                            buffer[round * bytePerRandomElement + j] = p[j] ^ p2[bytePerRandomElement - j - 1]
-                        }
-                    }
-                }
-                
-            }
-        };
-        
-    }
-    
-    @inline(__always)  static private func clean(_ buffer:inout SaBuffer){
-        memset(buffer.baseAddress, 0, buffer.count);
-    }
-    
-    @inline(__always)  static private func copyXsalsakey(strm:inout SaBuffer, key:inout SaBuffer){
+    @inline(__always) private func copyXsalsakey(strm:inout SaBuffer, key:inout SaBuffer){
         // z0, z5, z10, z15, z6, z7, z8, z9 as new Key
         
         let idxOfUint32 = [0,5,10,15,6,7,8,9];
@@ -208,7 +211,194 @@ public class Salsa20 {
         
     }
     
-    static func sa_crypt(msg:inout Data,keyData:inout Data,outData:inout Data,nonce:inout [UInt8] ,preAllocBuffer:inout [UInt8]?) throws {
+    
+    
+    @inline(__always) func UInt64ToUint8Array(idx:UInt64,bf:inout SaBuffer){
+        var idx0 = idx.littleEndian;
+        _ = withUnsafeBytes(of: &idx0) { bf1  in
+            memcpy(bf.baseAddress , bf1.baseAddress, 8);
+        }
+        
+    }
+    
+    
+    
+    /**
+     *  the best size of data is 64 * N;
+     *  inData and outData must have same size;
+     */
+    func update(inData: UnsafeRawPointer,outData: UnsafeMutableRawPointer,size:Int){
+        guard size > 0  else{
+            return;
+        }
+        
+        let size64 = UInt64(size);
+        if nonceArray.count == 8{
+            var sizeLeft = size64;
+            var curseOfData = 0;
+            var curseOfStrm:UInt64 = 0;
+            while sizeLeft > 0{
+                
+                UInt64ToUint8Array(idx: nextBlockCount, bf: &idxBf8)
+                initStream(strm: &strm, key: &key , nonce: &nonce8, indexLittleEndian: &idxBf8);
+                salsa20_block(out: &strmOut, stream: &strm,tmpStrm: &strmTmp);
+                
+                curseOfStrm = (nextPostion % 64);
+                let stepSize = min(64 - curseOfStrm,sizeLeft);
+                
+                let inbf = inData.bindMemory(to: UInt8.self, capacity: size);
+                let oubf = outData.bindMemory(to: UInt8.self, capacity: size);
+                
+                for i in 0..<Int(stepSize){
+                    oubf[curseOfData + i] = inbf[curseOfData + i] ^ strmOut[Int(curseOfStrm) + i];
+                }
+                
+                
+                curseOfData += Int(stepSize)
+                nextPostion += stepSize;
+                nextBlockCount = nextPostion/64 ;
+                
+                sizeLeft -= stepSize;
+            }
+        }
+        /// XSalsa20  24 byte nonce
+        else {
+            var sizeLeft = size64;
+            var curseOfData = 0;
+            var curseOfStrm:UInt64 = 0;
+            while sizeLeft > 0{
+                
+                
+                for n in 0..<8{
+                    nonce8[n] = nonceArray[n];
+                    idxBf8[n] = nonceArray[n+8];
+                }
+                initStream(strm: &strm, key: &key, nonce: &nonce8, indexLittleEndian: &idxBf8);
+                salsa20_block(out: &strmOut, stream: &strm,tmpStrm: &strmTmp);
+                
+                for n in 0..<8{
+                    nonce8[n] = nonceArray[n+16];
+                }
+                
+                UInt64ToUint8Array(idx: nextBlockCount, bf: &idxBf8)
+                copyXsalsakey(strm: &strmTmp, key: &key32Tmp);
+                initStream(strm: &strm, key: &key32Tmp, nonce: &nonce8, indexLittleEndian: &idxBf8);
+                salsa20_block(out: &strmOut, stream: &strm,tmpStrm: &strmTmp);
+                
+                
+                curseOfStrm = (nextPostion % 64);
+                let stepSize = min(64 - curseOfStrm,sizeLeft);
+                
+                let inbf = inData.bindMemory(to: UInt8.self, capacity: size);
+                let oubf = outData.bindMemory(to: UInt8.self, capacity: size);
+                
+                for i in 0..<Int(stepSize){
+                    oubf[curseOfData + i] = inbf[curseOfData + i] ^ strmOut[Int(curseOfStrm) + i];
+                }
+                
+                
+                curseOfData += Int(stepSize)
+                nextPostion += stepSize;
+                nextBlockCount = nextPostion/64 ;
+                
+                sizeLeft -= stepSize;
+            }
+        }
+    }
+    
+    
+    func reset(){
+        nextPostion = 0;
+        nextBlockCount = 0;
+    }
+    
+    func final(){
+        nextPostion = 0;
+        nextBlockCount = 0;
+        clean()
+    }
+    
+    func clean(){
+        memset(encBuffer.baseAddress, 0, encBuffer.count)
+        for i in 0..<keyArrary.count{
+            keyArrary[i] = 0;
+        }
+        for i in 0..<nonceArray.count{
+            keyArrary[i] = 0;
+        }
+        
+    }
+    deinit {
+        clean();
+        _encBfSpace.deallocate()
+    }
+    
+    
+    func sa_hash(msg32:inout [UInt8],out32:inout[UInt8]){
+        
+        memset(nonce8_hash2.baseAddress, 0, 8);
+        if(nonceArray.count > 8){
+            for i in 0..<8{
+                nonce8_hash2[i] = nonceArray[8 + i];
+            }
+        }
+        for i in 0..<8{
+            nonce8_hash1[i] = nonceArray[i];
+        }
+        
+        msg32.withUnsafeMutableBufferPointer { bfMsg in
+            initStream(strm: &strm, key: &bfMsg, nonce: &nonce8_hash1, indexLittleEndian: &nonce8_hash2)
+            salsa20_block(out: &strmOut, stream: &strm, tmpStrm: &strmTmp)
+        }
+        
+        //              choose Uint32  0, 5, 10, 15, 6, 7, 8, 9  without last
+        strmTmp.withUnsafeBytes { bfTmp in
+            let bfTmp32 = bfTmp.baseAddress!.bindMemory(to: UInt32.self, capacity: 16);
+            out32.withUnsafeMutableBytes { bfOut in
+                let bfOut32 = bfOut.baseAddress!.bindMemory(to: UInt32.self, capacity: 8)
+                bfOut32[0] = bfTmp32[0];
+                bfOut32[1] = bfTmp32[5];
+                bfOut32[2] = bfTmp32[10];
+                bfOut32[3] = bfTmp32[15];
+                bfOut32[4] = bfTmp32[6];
+                bfOut32[5] = bfTmp32[7];
+                bfOut32[6] = bfTmp32[8];
+                bfOut32[7] = bfTmp32[9];
+            }
+            
+        }
+        
+    }
+    
+    var rnd = SystemRandomNumberGenerator();
+    public func randomize(_ buffer:inout [UInt8]){
+        let bytePerRandomElement = 8;
+        let round = buffer.count / bytePerRandomElement ;
+        let remain = buffer.count % bytePerRandomElement ;
+        
+        for i in 0..<round{
+            var randNum = rnd.next();
+            withUnsafePointer(to: &randNum) { bf in
+                bf.withMemoryRebound(to: UInt8.self, capacity: bytePerRandomElement) { p  in
+                    for j in 0..<bytePerRandomElement{
+                        buffer[i * bytePerRandomElement + j] = p[j]
+                    }
+                }
+            };
+        }
+        
+        var randNum = rnd.next();
+        withUnsafePointer(to: &randNum) { bf in
+            bf.withMemoryRebound(to: UInt8.self, capacity: bytePerRandomElement) { p  in
+                for j in 0..<remain{
+                    buffer[round * bytePerRandomElement + j] = p[j]
+                }
+            }
+        };
+    }
+    
+    // MARK:
+    static func sa_crypt(msg:inout Data,keyData:inout Data,outData:inout Data,nonce:inout [UInt8] ) throws {
         guard (nonce.count == 24 || nonce.count == 8) else{
             throw SaError.NonceLengthError
         }
@@ -216,229 +406,144 @@ public class Salsa20 {
         guard (outData.count == msg.count ) else{
             throw SaError.NonceLengthError
         }
-        let BufferCount = 272;
-        guard (preAllocBuffer == nil || preAllocBuffer!.count !=  BufferCount ) else{
-            throw SaError.preallocMemSizeNot272
+        var key = [UInt8](repeating: 0, count: 32);
+        for i in 0..<keyData.count{
+            key[i] = keyData[i];
         }
         
-        let isXsalsa20 = nonce.count == 24 ;
-        
-        var bufferOfAll :[UInt8];
-        if preAllocBuffer != nil && preAllocBuffer!.count >= BufferCount{
-            bufferOfAll = preAllocBuffer!
-        }else{
-            bufferOfAll = [UInt8](repeating: 0, count: BufferCount);
-        }
-        
-        bufferOfAll.withUnsafeMutableBufferPointer{ bfAll in
-            /// clean
-            defer{
-                clean(&bfAll)
-            }
-            
-            
-            var startPostion = 0;
-            var strm = UnsafeMutableBufferPointer(start:bfAll.baseAddress, count: 64);
-            
-            startPostion += strm.count;
-            var strmOut = UnsafeMutableBufferPointer(start:bfAll.baseAddress?.advanced(by: startPostion), count: 64);
-            
-            startPostion += strmOut.count;
-            var strmTmp = UnsafeMutableBufferPointer(start:bfAll.baseAddress?.advanced(by: startPostion), count: 64);
-            
-            startPostion += strmTmp.count;
-            var key = UnsafeMutableBufferPointer(start:bfAll.baseAddress?.advanced(by: startPostion), count: 32);
-            
-            startPostion += key.count;
-            var key32Tmp = UnsafeMutableBufferPointer(start:bfAll.baseAddress?.advanced(by: startPostion), count: 32);
-            
-            startPostion += key32Tmp.count;
-            var idxBf8 = UnsafeMutableBufferPointer(start:bfAll.baseAddress?.advanced(by: startPostion), count: 8);
-            
-            startPostion += idxBf8.count;
-            var nonce8 = UnsafeMutableBufferPointer(start:bfAll.baseAddress?.advanced(by: startPostion), count: 8);
-            startPostion += nonce8.count
-            for i in 0..<8{
-                nonce8[i] = nonce[i];
-            }
-             
-            keyData.withUnsafeBytes { bf  in
-                let p = bf.baseAddress?.bindMemory(to: UInt8.self, capacity: key.count);
-                memcpy(key.baseAddress , p , key.count);
-                memcpy(key32Tmp.baseAddress , p , key.count);
-            }
-            
-            
-             
-            
-            msg.withUnsafeBytes { bf in
-                let r = bf.count / 64;
-                for i in 0..<r{
-                    memcpy(key32Tmp.baseAddress, key.baseAddress, 32)
-                     
-                    if isXsalsa20{
-                        /// fill block-count with nonce
-                        for n in 0..<8{
-                            nonce8[n] = nonce[n];
-                            idxBf8[n] = nonce[n+8];
-                        }
-                        initStream(strm: &strm, key: &key32Tmp, nonce: &nonce8, indexLittleEndian: &idxBf8);
-                        salsa20_block(out: &strmOut, stream: &strm,tmpStrm: &strmTmp);
-                        
-                        for n in 0..<8{
-                            nonce8[n] = nonce[n+16];
-                        }
-                        let idx = UInt64(i);
-                        UInt64ToUint8Array(idx: idx, bf: &idxBf8)
-                        copyXsalsakey(strm: &strmTmp, key: &key32Tmp);
-                        initStream(strm: &strm, key: &key32Tmp, nonce: &nonce8, indexLittleEndian: &idxBf8);
-                        salsa20_block(out: &strmOut, stream: &strm,tmpStrm: &strmTmp);
-                        
-                        
-                        
-                    }else{
-                        for n in 0..<8{
-                            nonce8[n] = nonce[n];
-                        }
-                        
-                        let idx = UInt64(i);
-                        UInt64ToUint8Array(idx: idx, bf: &idxBf8)
-                        
-                        initStream(strm: &strm, key: &key32Tmp, nonce: &nonce8, indexLittleEndian: &idxBf8);
-                        salsa20_block(out: &strmOut, stream: &strm,tmpStrm: &strmTmp);
-                    }
-                    
-                    
-                    
-                    
-                    msg.withUnsafeBytes { bfMsg  in
-                        for j in 0..<strmOut.count{
-                            let indexOfMsg = i * 64 + j;
-                            let z = bfMsg[indexOfMsg]
-                            outData[indexOfMsg] = z ^ strmOut[j]
-                        }
-                    }
-                }
+        msg.withUnsafeBytes { bfMsg in
+            outData.withUnsafeMutableBytes { bfOut in
+                let sa = try! Salsa20(key: key , nonce: nonce)
                 
-                let remain = bf.count % 64;
-                if remain > 0{
-                    memcpy(key32Tmp.baseAddress, key.baseAddress, 32)
-                    
-                    if isXsalsa20{
-                        for n in 0..<8{
-                            idxBf8[n] = nonce[n+8];
-                            nonce8[n] = nonce[n];
-                        }
-                        initStream(strm: &strm, key: &key32Tmp, nonce: &nonce8, indexLittleEndian: &idxBf8);
-                        
-                        salsa20_block(out: &strmOut, stream: &strm,tmpStrm: &strmTmp);
-                        
-                        for n in 0..<8{
-                            nonce8[n] = nonce[n+16];
-                        }
-                        
-                        let idx = UInt64(r);
-                        UInt64ToUint8Array(idx: idx, bf: &idxBf8)
-                        copyXsalsakey(strm: &strmTmp, key: &key32Tmp);
-                        
-                        initStream(strm: &strm, key: &key32Tmp, nonce: &nonce8, indexLittleEndian: &idxBf8);
-                        salsa20_block(out: &strmOut, stream: &strm,tmpStrm: &strmTmp);
-                        
-                    }
-                    else{
-                        for n in 0..<8{
-                            nonce8[n] = nonce[n];
-                        }
-                        UInt64ToUint8Array(idx: UInt64(r), bf: &idxBf8)
-                        
-                        initStream(strm: &strm, key: &key, nonce: &nonce8, indexLittleEndian: &idxBf8);
-                        
-                        salsa20_block(out: &strmOut, stream: &strm,tmpStrm: &strmTmp);
-                    }
-                    
-                     
-                    msg.withUnsafeBytes { bfMsg  in
-                        for j in 0..<remain{
-                            let indexOfMsg = r * 64 + j;
-                            let z = bfMsg[indexOfMsg]
-                            outData[indexOfMsg] = z ^ strmOut[j]
-                        }
-                    }
-                }
+                sa.update(inData: bfMsg.baseAddress!, outData: bfOut.baseAddress!, size: bfOut.count);
+                
+                sa.final();
             }
         }
+        
+        
+        
+        
     }
     
     
+    static func testEnc(){
+        let txt = "12345678901234567我的 的的8901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
+        
+        
+        let key = "12345678901234567890123456789012".map {$0.asciiValue!};
+        let nonce32 = "123456781234567812345678".map {$0.asciiValue!};
+        let  nonce8 = "12345678".map {$0.asciiValue!};
+        var nonce = nonce32
+        
+        var data = txt.data(using: .utf8)!
+        var outData = data;
+        var keydata =  Data(bytes: key , count: key.count);
+        
+        try! Salsa20.sa_crypt(msg: &data, keyData: &keydata, outData: &outData, nonce: &nonce)
+        
+        print(outData.base64EncodedString())
+    }
     
-    static func sa_hash(msg32:inout [UInt8],out32:inout[UInt8]){
-        var bfall = [UInt8](repeating: 0, count: 208);
-        bfall.withUnsafeMutableBufferPointer { bf  in
-            msg32.withUnsafeMutableBufferPointer {bfKey in
-                var strm = UnsafeMutableBufferPointer(start:bf.baseAddress?.advanced(by: 0), count: 64);
-                
-                var strmOut = UnsafeMutableBufferPointer(start:bf.baseAddress?.advanced(by: 64), count: 64);
-                
-                var strmTmp = UnsafeMutableBufferPointer(start:bf.baseAddress?.advanced(by: 128), count: 64);
-                
-                var nonce8_1 = UnsafeMutableBufferPointer(start:bf.baseAddress?.advanced(by: 192), count: 8);
-                var nonce8_2 = UnsafeMutableBufferPointer(start:bf.baseAddress?.advanced(by: 200), count: 8);
-                
-                initStream(strm: &strm, key: &bfKey, nonce: &nonce8_1, indexLittleEndian: &nonce8_2)
-                salsa20_block(out: &strmOut, stream: &strm, tmpStrm: &strmTmp)
-                
-                
-//              choose Uint32  0, 5, 10, 15, 6, 7, 8, 9  without last
-                strmTmp.withUnsafeBytes { bfTmp in
-                    let bfTmp32 = bfTmp.baseAddress!.bindMemory(to: UInt32.self, capacity: 16);
-                    out32.withUnsafeMutableBytes { bfOut in
-                        let bfOut32 = bfOut.baseAddress!.bindMemory(to: UInt32.self, capacity: 8)
-                        bfOut32[0] = bfTmp32[0];
-                        bfOut32[1] = bfTmp32[5];
-                        bfOut32[2] = bfTmp32[10];
-                        bfOut32[3] = bfTmp32[15];
-                        bfOut32[4] = bfTmp32[6];
-                        bfOut32[5] = bfTmp32[7];
-                        bfOut32[6] = bfTmp32[8];
-                        bfOut32[7] = bfTmp32[9];
-                    }
-                    
-                }
-                /// choose Uint32  0, 5, 10, 15, 6, 7, 8, 9  without last
+    static func printStm(_ s:inout SaBuffer){
+        var i = 0 ;
+        print("---------");
+        
+        var str = ""
+        while i < s.count{
+            let str1 = String(format: "%02x%02x%02x%02x", s[i],s[i + 1],s[i + 2],s[i + 3])
+            str += str1 + " "
+            i += 4;
+            
+            if(i % 16 == 0){
+                str += "\n"
             }
+        }
+        print(str);
+    }
+    
+    static func testHash(){
+        // https://www.iacr.org/archive/fse2008/50860470/50860470.pdf
+        let  key = [UInt8](repeating: 0, count: 32);
+        let  nonce  = [UInt8](repeating: 0, count: 8);
+        
+        do {
+            let z = try Salsa20(key: key, nonce: nonce);
+            print(33)
+            var out = z.strmOut
+            var tmp = z.strmTmp
+            var stm = z.strm
+            
+            var A = 3 as UInt32;
+            var A0 = A + (1 << 31)
+            
+            stm.baseAddress?.withMemoryRebound(to: UInt32.self, capacity: 16) { bf in
+                bf[0] = A;
+                bf[1] = A0;
+                bf[2] = A;
+                bf[3] = A0;
+                
+                bf[4] = A;
+                bf[5] = A0;
+                bf[6] = A;
+                bf[7] = A0;
+                
+                bf[8] = A;
+                bf[9] = A0;
+                bf[10] = A;
+                bf[11] = A0;
+                
+                bf[12] = A;
+                bf[13] = A0;
+                bf[14] = A;
+                bf[15] = A0;
+            }
+            
+            z.salsa20_block(out: &out, stream: &stm, tmpStrm: &tmp)
+            printStm(&out);
+            
+            
+            var tmp1 = A;
+            A = A0
+            A0 = tmp1
+            
+            stm.baseAddress?.withMemoryRebound(to: UInt32.self, capacity: 16) { bf in
+                bf[0] = A;
+                bf[1] = A0;
+                bf[2] = A;
+                bf[3] = A0;
+                
+                bf[4] = A;
+                bf[5] = A0;
+                bf[6] = A;
+                bf[7] = A0;
+                
+                bf[8] = A;
+                bf[9] = A0;
+                bf[10] = A;
+                bf[11] = A0;
+                
+                bf[12] = A;
+                bf[13] = A0;
+                bf[14] = A;
+                bf[15] = A0;
+            }
+            
+            z.salsa20_block(out: &out, stream: &stm, tmpStrm: &tmp)
+            printStm(&out);
+            
+            print("Hash Collison");
             
             
         }
-    }
-    
-    
-    static func test(){
-        var key = "12345678901234567890123456789012".map {$0.asciiValue!};
-        var nonce32 = "123456781234567812345678".map {$0.asciiValue!};
-        var nonce8 = "12345678".map {$0.asciiValue!};
-        var nonce = nonce8;
-        
-        let txt = "lo worldhello worldhello worldhello worldhello worldhello worldhello worldhello world我lo worldhello worldhello worldhello worldhello worldhello worldhello worldhello world"
-        var data = txt.data(using: .utf8)!;
-        var dataKey = Data(bytes: &key, count: key.count);
-        var outData : Data = data;
-        var d:[UInt8]? = nil
-        try! sa_crypt(msg: &data, keyData: &dataKey, outData: &outData, nonce: &nonce, preAllocBuffer: &d);
-        
-        var outData2 : Data = outData;
-        try! sa_crypt(msg: &outData, keyData: &dataKey, outData: &outData2, nonce: &nonce,preAllocBuffer: &d);
-        let s = String(data: outData2, encoding: .utf8)!;
-        print("result",s == txt)
-        print("result",s )
-        print("result",outData.base64EncodedString())
+        catch let e{
+            print(e)
+        }
          
-        var msg32 = [UInt8](repeating: 0, count: 32);
-        var msg32out = [UInt8](repeating: 0, count: 32);
-        sa_hash(msg32: &msg32 , out32: &msg32out);
-        print(msg32out)
-        
-        
     }
-    
-    
+    static func test(){
+        testEnc()
+    }
 }
+
+

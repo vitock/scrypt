@@ -11,7 +11,7 @@ import QuartzCore
 
 print("Hi",CommandLine.arguments)
 
-Salsa20.test();
+
  
 func tt(){
     
@@ -25,7 +25,7 @@ func tt(){
     let dataOut = malloc(dataOutAvailable);
     var outSize = 0;
     
-    let testCount = 10000;
+    let testCount = 100000;
     
     data.withUnsafeBytes { bf  in
         
@@ -52,25 +52,36 @@ func tt(){
     }
     
     var dataKey = Data(bytes: key, count: key.count)
-
     var nonce = [UInt8](repeating: 24, count: 8);
-    
     var dout : Data = Data(repeating: 0, count: data.count);
     
-    let st = CACurrentMediaTime();
+    var st = CACurrentMediaTime();
+    var et = CACurrentMediaTime();
     
-    
-    var BfAll: [UInt8]? = [UInt8](repeating: 0, count: 272);
-    
-    for _ in 0...testCount{
-        try? Salsa20.sa_crypt(msg: &data, keyData: &dataKey, outData: &dout, nonce: &nonce ,preAllocBuffer: &BfAll)
+    let sa = try! Salsa20(key: key, nonce: nonce);
+    data.withUnsafeBytes { bfMsg_ in
+        let bfMsg =  UnsafeRawPointer( bfMsg_.baseAddress)!
+        
+        dout.withUnsafeMutableBytes { bfOut_ in
+            let  bfOut = UnsafeMutableRawPointer (bfOut_.baseAddress)!;
+            for _ in 0...testCount{
+                 
+                sa.update(inData: bfMsg, outData: bfOut, size: bfOut_.count)
+                sa.final();
+            }
+        }
     }
     
-    let et = CACurrentMediaTime();
+   
+    
+    et = CACurrentMediaTime();
     print("salsa20:",(et - st) * 1000)
 }
 
-//tt();
+tt();
 
- 
+
+
+Salsa20.test();
+
 
