@@ -8,11 +8,7 @@
 import Foundation
 import CommonCrypto
 import QuartzCore
-
 print("Hi",CommandLine.arguments)
-
-
- 
 func tt(){
     
     let BlockSizeAES128 = 16
@@ -77,11 +73,33 @@ func tt(){
     et = CACurrentMediaTime();
     print("salsa20:",(et - st) * 1000)
 }
-
-tt();
-
-
-
+//tt();
+#if DEBUG
 Salsa20.test();
+#endif
+ 
 
+func test(){
+    let key = "1234";
+    var keyOut = [UInt8](repeating: 0, count: 320);
+    
+    let t11 = CACurrentMediaTime();
+    let salt = "aa3";
+    salt.withCString { psalt  in
+        key.withCString { bf  in
+            let s = Scrypt();
+            for _ in 0...1{
+                s.generatePass(phrase: bf , phraseSize: 4 , salt: psalt,saltLen: salt.count ,derivedKey: &keyOut, desiredKeyLen: keyOut.count);
+            }
+        }
+    }
+    
+    let t22 = CACurrentMediaTime();
+    let d = Data(bytes: keyOut, count: keyOut.count)
+    print(d.tohexString())
+    print("\((t22 - t11))" )
+}
+
+
+ 
 

@@ -26,9 +26,8 @@ public class Salsa20{
     
     
     typealias SaBuffer = UnsafeMutableBufferPointer<UInt8>
-    
-    private let _encBfSpace:UnsafeMutablePointer<UInt8>
-    private var encBuffer:SaBuffer
+    let BufferCount = 320;
+    private var encBuffer:UnsafeMutablePointer<UInt8>
     
     
     private var nextBlockCount:UInt64;
@@ -36,7 +35,6 @@ public class Salsa20{
     
     private var keyArrary:[UInt8];
     private var nonceArray:[UInt8];
-    private let isEncryptMode:Int
     
     
     private var strm:SaBuffer;
@@ -54,8 +52,14 @@ public class Salsa20{
     private var msg32_hash:SaBuffer;
     
     
+    convenience init(){
+        let key = [uint8](repeating: 0, count: 32);
+        let nonce = [uint8](repeating: 0, count: 8);
+        try! self.init(key:key,nonce:nonce);
+        
+    }
     
-    init(key:[UInt8],nonce:[UInt8], isEncryptMode:Int = 1) throws {
+    init(key:[UInt8],nonce:[UInt8]) throws {
         guard nonce.count == 8 || nonce.count == 24  else{
             throw SaError.NonceLengthError;
         }
@@ -65,46 +69,45 @@ public class Salsa20{
         
         nextPostion = 0;
         nextBlockCount = 0;
-        self.isEncryptMode = isEncryptMode;
-        let BufferCount = 320;
         
-        _encBfSpace = UnsafeMutablePointer<UInt8>.allocate(capacity: BufferCount)
         
-        encBuffer = UnsafeMutableBufferPointer<UInt8>(start: _encBfSpace, count: BufferCount);
+        
+        encBuffer = UnsafeMutableRawPointer.allocate(byteCount: BufferCount, alignment: 4).bindMemory(to: UInt8.self, capacity: BufferCount);
+        
         keyArrary = key;
         nonceArray = nonce;
         
         
         
         var startPostion = 0;
-        strm = UnsafeMutableBufferPointer(start:encBuffer.baseAddress, count: 64);
+        strm = UnsafeMutableBufferPointer(start:encBuffer, count: 64);
         
         startPostion += strm.count;
-        strmOut = UnsafeMutableBufferPointer(start:encBuffer.baseAddress?.advanced(by: startPostion), count: 64);
+        strmOut = UnsafeMutableBufferPointer(start:encBuffer.advanced(by: startPostion), count: 64);
         
         startPostion += strmOut.count;
-        strmTmp = UnsafeMutableBufferPointer(start:encBuffer.baseAddress?.advanced(by: startPostion), count: 64);
+        strmTmp = UnsafeMutableBufferPointer(start:encBuffer.advanced(by: startPostion), count: 64);
         
         startPostion += strmTmp.count;
-        self.key = UnsafeMutableBufferPointer(start:encBuffer.baseAddress?.advanced(by: startPostion), count: 32);
+        self.key = UnsafeMutableBufferPointer(start:encBuffer.advanced(by: startPostion), count: 32);
         
         startPostion += key.count;
-        key32Tmp = UnsafeMutableBufferPointer(start:encBuffer.baseAddress?.advanced(by: startPostion), count: 32);
+        key32Tmp = UnsafeMutableBufferPointer(start:encBuffer.advanced(by: startPostion), count: 32);
         
         startPostion += key32Tmp.count;
-        idxBf8 = UnsafeMutableBufferPointer(start:encBuffer.baseAddress?.advanced(by: startPostion), count: 8);
+        idxBf8 = UnsafeMutableBufferPointer(start:encBuffer.advanced(by: startPostion), count: 8);
         
         startPostion += idxBf8.count;
-        nonce8 = UnsafeMutableBufferPointer(start:encBuffer.baseAddress?.advanced(by: startPostion), count: 8);
+        nonce8 = UnsafeMutableBufferPointer(start:encBuffer.advanced(by: startPostion), count: 8);
         startPostion += nonce8.count
         
-        nonce8_hash1 = UnsafeMutableBufferPointer(start:encBuffer.baseAddress?.advanced(by: startPostion), count: 8);
+        nonce8_hash1 = UnsafeMutableBufferPointer(start:encBuffer.advanced(by: startPostion), count: 8);
         startPostion += nonce8_hash1.count
         
-        nonce8_hash2 = UnsafeMutableBufferPointer(start:encBuffer.baseAddress?.advanced(by: startPostion), count: 8);
+        nonce8_hash2 = UnsafeMutableBufferPointer(start:encBuffer.advanced(by: startPostion), count: 8);
         startPostion += nonce8_hash2.count
         
-        msg32_hash  = UnsafeMutableBufferPointer(start:encBuffer.baseAddress?.advanced(by: startPostion), count: 8);
+        msg32_hash  = UnsafeMutableBufferPointer(start:encBuffer.advanced(by: startPostion), count: 8);
         startPostion += msg32_hash.count
         
         
@@ -319,7 +322,7 @@ public class Salsa20{
     }
     
     func clean(){
-        memset(encBuffer.baseAddress, 0, encBuffer.count)
+        memset(encBuffer, 0, BufferCount)
         for i in 0..<keyArrary.count{
             keyArrary[i] = 0;
         }
@@ -330,9 +333,14 @@ public class Salsa20{
     }
     deinit {
         clean();
-        _encBfSpace.deallocate()
+        encBuffer.deallocate()
     }
     
+    func sa_64ByteTo64Byte(inBf:UnsafeRawPointer,outBf:UnsafeMutableRawPointer,ROUNDs:Int = 8){
+        memcpy(strm.baseAddress, inBf, 64);
+        salsa20_block(out: &strmOut, stream: &strm, tmpStrm: &strmTmp,ROUNDS: ROUNDs)
+        memcpy(outBf, strmOut.baseAddress, 64)
+    }
     
     func sa_hash(msg32:inout [UInt8],out32:inout[UInt8]){
         
@@ -370,8 +378,8 @@ public class Salsa20{
         
     }
     
-    var rnd = SystemRandomNumberGenerator();
-    public func randomize(_ buffer:inout [UInt8]){
+    static var rnd = SystemRandomNumberGenerator();
+    public static func randomize(_ buffer:inout [UInt8]){
         let bytePerRandomElement = 8;
         let round = buffer.count / bytePerRandomElement ;
         let remain = buffer.count % bytePerRandomElement ;
@@ -426,23 +434,68 @@ public class Salsa20{
         
     }
     
-    
+    #if DEBUG
     static func testEnc(){
-        let txt = "12345678901234567我的 的的8901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
+        let txt = " 34567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
         
         
         let key = "12345678901234567890123456789012".map {$0.asciiValue!};
         let nonce32 = "123456781234567812345678".map {$0.asciiValue!};
-        let  nonce8 = "12345678".map {$0.asciiValue!};
-        var nonce = nonce32
+        let nonce8 = "12345671".map {$0.asciiValue!};
+        var nonce = nonce8
         
-        var data = txt.data(using: .utf8)!
+        var bf = [uint8](repeating: 0, count: 5000)
+        randomize(&bf);
+        var data = Data(bytes: bf , count: bf.count);
         var outData = data;
+        var outData1 = data;
         var keydata =  Data(bytes: key , count: key.count);
+        
+        
+        let sa = try! Salsa20(key: key , nonce: nonce);
+        
+        data.withUnsafeBytes { bfMsg in
+            outData1.withUnsafeMutableBytes { bfOut  in
+                var k = 0;
+                while k < bfOut.count {
+                    var step = Int(arc4random_uniform(80));
+                    step = min(step,bfOut.count - k);
+                    sa.update(inData: bfMsg.baseAddress!.advanced(by: k), outData: bfOut.baseAddress!.advanced(by: k), size: step)
+                     
+                    k += step;
+                }
+            }
+        }
+        
+        sa.reset()
+        
         
         try! Salsa20.sa_crypt(msg: &data, keyData: &keydata, outData: &outData, nonce: &nonce)
         
-        print(outData.base64EncodedString())
+        print("enc",outData1 == outData)
+        
+        
+        
+        var dataDec = outData1;
+        
+        dataDec.withUnsafeMutableBytes { bfDec in
+            outData1.withUnsafeBytes { bfEnc  in
+                var k = 0;
+                while k < bfEnc.count {
+                    var step = Int(arc4random_uniform(80));
+                    step = min(step,bfEnc.count - k);
+                    sa.update(inData: bfEnc.baseAddress!.advanced(by: k), outData: bfDec.baseAddress!.advanced(by: k), size: step)
+                     
+                    k += step;
+                }
+            }
+        }
+        
+        
+        print("dec",dataDec == data)
+        
+//        print(String(data: dataDec, encoding: .utf8))
+        
     }
     
     static func printStm(_ s:inout SaBuffer){
@@ -544,6 +597,8 @@ public class Salsa20{
     static func test(){
         testEnc()
     }
+    
+    #endif
 }
 
 
