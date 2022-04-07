@@ -16,7 +16,7 @@ Pod::Spec.new do |spec|
   #
 
   spec.name         = "LTScrypt"
-  spec.version      = "0.0.1"
+  spec.version      = "0.0.2"
   spec.summary      = "A simple swift tool implement Scrypt kdf, and Sasal20 encryption algorithm"
 
   # This description is used to generate tags and improve search results.
@@ -27,7 +27,7 @@ Pod::Spec.new do |spec|
   spec.description  =  "A simple swift tool implement Scrypt kdf, and Sasal20 encryption algorithm"
                    
 
-  spec.homepage     = "https://github.com/vitock/scrypt.git"
+  spec.homepage     = "https://github.com/vitock/scrypt"
   # spec.screenshots  = "www.example.com/screenshots_1.gif", "www.example.com/screenshots_2.gif"
 
 
