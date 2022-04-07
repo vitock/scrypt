@@ -24,7 +24,7 @@ Pod::Spec.new do |spec|
   #   * Try to keep it short, snappy and to the point.
   #   * Write the description between the DESC delimiters below.
   #   * Finally, don't worry about the indent, CocoaPods strips it!
-  spec.description  =  "A simple swift tool implement Scrypt kdf, and Sasal20 encryption algorithm"
+  spec.description  =  "simple swift tool implement Scrypt kdf, and Sasal20 encryption algorithm,You can use scrypt or salsa20 "
                    
 
   spec.homepage     = "https://github.com/vitock/scrypt"
