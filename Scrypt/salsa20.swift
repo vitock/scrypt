@@ -56,10 +56,9 @@ public class Salsa20{
         let key = [UInt8](repeating: 0, count: 32);
         let nonce = [UInt8](repeating: 0, count: 8);
         try! self.init(key:key,nonce:nonce);
-        
     }
     
-    init(key:[UInt8],nonce:[UInt8]) throws {
+    public init(key:[UInt8],nonce:[UInt8]) throws {
         guard nonce.count == 8 || nonce.count == 24  else{
             throw SaError.NonceLengthError;
         }
@@ -230,7 +229,7 @@ public class Salsa20{
      *  the best size of data is 64 * N;
      *  inData and outData must have same size;
      */
-    func update(inData: UnsafeRawPointer,outData: UnsafeMutableRawPointer,size:Int){
+    public func update(inData: UnsafeRawPointer,outData: UnsafeMutableRawPointer,size:Int){
         guard size > 0  else{
             return;
         }
@@ -310,18 +309,18 @@ public class Salsa20{
     }
     
     
-    func reset(){
+    public func reset(){
         nextPostion = 0;
         nextBlockCount = 0;
     }
     
-    func final(){
+    public func final(){
         nextPostion = 0;
         nextBlockCount = 0;
         clean()
     }
     
-    func clean(){
+    public func clean(){
         memset(encBuffer, 0, BufferCount)
         for i in 0..<keyArrary.count{
             keyArrary[i] = 0;
@@ -406,7 +405,7 @@ public class Salsa20{
     }
     
     // MARK:
-    static func sa_crypt(msg:inout Data,keyData:inout Data,outData:inout Data,nonce:inout [UInt8] ) throws {
+    public static func sa_crypt(msg:inout Data,keyData:inout Data,outData:inout Data,nonce:inout [UInt8] ) throws {
         guard (nonce.count == 24 || nonce.count == 8) else{
             throw SaError.NonceLengthError
         }
