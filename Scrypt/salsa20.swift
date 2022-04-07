@@ -53,8 +53,8 @@ public class Salsa20{
     
     
     convenience init(){
-        let key = [uint8](repeating: 0, count: 32);
-        let nonce = [uint8](repeating: 0, count: 8);
+        let key = [UInt8](repeating: 0, count: 32);
+        let nonce = [UInt8](repeating: 0, count: 8);
         try! self.init(key:key,nonce:nonce);
         
     }
@@ -444,7 +444,7 @@ public class Salsa20{
         let nonce8 = "12345671".map {$0.asciiValue!};
         var nonce = nonce8
         
-        var bf = [uint8](repeating: 0, count: 5000)
+        var bf = [UInt8](repeating: 0, count: 5000)
         randomize(&bf);
         var data = Data(bytes: bf , count: bf.count);
         var outData = data;
