@@ -13,10 +13,10 @@ import QuartzCore
 public class Scrypt{
     
     // sha256
-    public var ParallelizationFactor = 1;
-    public var BlockSizeFactor = 8;
+    public let ParallelizationFactor:Int;
+    public let BlockSizeFactor :Int;
 //    var hLen = 32;
-    public var lgIteration = 14; // 2^14
+    public let lgIteration :Int; // 2^14
     
     var blockSize :Int { get {return BlockSizeFactor << 7}}
     var bfSize : Int { get {return blockSize * ParallelizationFactor }}
@@ -26,12 +26,10 @@ public class Scrypt{
     let bfRmixBlock : UnsafeMutableRawPointer;
     let bfRmixV : UnsafeMutableRawPointer;
     
-    
-    public init(){
-//        ParallelizationFactor = 1;
-//        BlockSizeFactor = 8;
-//        lgIteration = 14
- 
+    public init(ParallelizationFactor: Int,BlockSizeFactor:Int,lgIteration:Int){
+        self.ParallelizationFactor = ParallelizationFactor;
+        self.BlockSizeFactor = BlockSizeFactor;
+        self.lgIteration = lgIteration;
         
         let blockSize = BlockSizeFactor << 7;
         let bfSize = blockSize * ParallelizationFactor;
@@ -45,6 +43,12 @@ public class Scrypt{
         let idx = 1 << lgIteration;
         bfRmixV = UnsafeMutableRawPointer.allocate(byteCount: idx * blockSize * ParallelizationFactor , alignment: 4);
         bfRmixV.initializeMemory(as: UInt8.self, repeating: 0, count: idx * blockSize * ParallelizationFactor);
+    }
+    public convenience init(){
+//        ParallelizationFactor = 1;
+//        BlockSizeFactor = 8;
+//        lgIteration = 14
+        self.init(ParallelizationFactor:1,BlockSizeFactor:8,lgIteration:14);
     }
     
     func clean(){
