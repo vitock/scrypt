@@ -27,7 +27,7 @@ public class Scrypt{
     let bfRmixV : UnsafeMutableRawPointer;
     
     
-    init(){
+    public init(){
 //        ParallelizationFactor = 1;
 //        BlockSizeFactor = 8;
 //        lgIteration = 14
