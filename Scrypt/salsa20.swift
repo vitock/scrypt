@@ -17,7 +17,8 @@ public class Salsa20{
     @inline(__always) private func ROTL(a:UInt32,b:UInt32) -> UInt32{
         return (a << b) | (a >> (32-b))
     }
-    @inline(__always) private func QR(_ a: inout UInt32,_ b:inout UInt32,_ c:inout UInt32,_ d:inout UInt32)  {
+    @inline(__always) private func QR(_ a: inout UInt32,_ b:inout UInt32,_ c:inout UInt32,_ d:inout UInt32 )  {
+        
         b ^= ROTL(a: a &+ d , b: 7);
         c ^= ROTL(a: b &+ a , b: 9);
         d ^= ROTL(a: c &+ b , b: 13);
@@ -30,8 +31,8 @@ public class Salsa20{
     private var encBuffer:UnsafeMutablePointer<UInt8>
     
     
-    private var nextBlockCount:UInt64;
-    private var nextPostion:UInt64;
+     var nextBlockCount:UInt64;
+     var nextPostion:UInt64;
     
     private var keyArrary:[UInt8];
     private var nonceArray:[UInt8];
@@ -58,6 +59,9 @@ public class Salsa20{
         try! self.init(key:key,nonce:nonce);
     }
     
+    /// 0 salsa20 1 xsalsa20
+    let salsaType:Int;
+    
     public init(key:[UInt8],nonce:[UInt8]) throws {
         guard nonce.count == 8 || nonce.count == 24  else{
             throw SaError.NonceLengthError;
@@ -65,6 +69,8 @@ public class Salsa20{
         guard key.count == 32  else{
             throw SaError.keyLengthNot32;
         }
+        
+        salsaType = nonce.count == 24 ? 1 : 0;
         
         nextPostion = 0;
         nextBlockCount = 0;
@@ -120,6 +126,9 @@ public class Salsa20{
             memcpy(self.key.baseAddress , p , key.count);
             memcpy(key32Tmp.baseAddress , p , key.count);
         }
+        
+        
+        initStream(strm: &strm, key: &self.key , nonce: &nonce8, indexLittleEndian: &idxBf8);
     }
     
     @inline(__always) func initStream(strm:inout SaBuffer,key:inout SaBuffer,nonce:inout SaBuffer,indexLittleEndian:inout SaBuffer){
@@ -170,9 +179,10 @@ public class Salsa20{
         
         tmpStrm.baseAddress!.withMemoryRebound(to: UInt32.self, capacity: 16){ bf32 in
             let x = bf32;
-            for _ in stride(from: 0, to: ROUNDS, by: 2) {
-                
+            for k in stride(from: 0, to: ROUNDS, by: 2) {
+                 
                 QR(&x[ 0], &x[ 4], &x[ 8], &x[12]);    // column 1
+                
                 QR(&x[ 5], &x[ 9], &x[13], &x[ 1]);    // column 2
                 QR(&x[10], &x[14], &x[ 2], &x[ 6]);    // column 3
                 QR(&x[15], &x[ 3], &x[ 7], &x[11]);    // column 4
@@ -223,6 +233,21 @@ public class Salsa20{
         
     }
     
+    @inline(__always) func UInt64ToSteam(idx:UInt64,strm:inout SaBuffer){
+        var idx0 = idx.littleEndian;
+        withUnsafeBytes(of: &idx0) { bf1  in
+            strm[32] = bf1[0]
+            strm[33] = bf1[1]
+            strm[34] = bf1[2]
+            strm[35] = bf1[3]
+            strm[36] = bf1[4]
+            strm[37] = bf1[5]
+            strm[38] = bf1[6]
+            strm[39] = bf1[7]
+        }
+        
+    }
+    
     
     
     /**
@@ -235,17 +260,19 @@ public class Salsa20{
         }
         
         let size64 = UInt64(size);
-        if nonceArray.count == 8{
+        if salsaType == 0{
             var sizeLeft = size64;
             var curseOfData = 0;
             var curseOfStrm:UInt64 = 0;
             while sizeLeft > 0{
                 
-                UInt64ToUint8Array(idx: nextBlockCount, bf: &idxBf8)
-                initStream(strm: &strm, key: &key , nonce: &nonce8, indexLittleEndian: &idxBf8);
+//                UInt64ToUint8Array(idx: nextBlockCount, bf: &idxBf8)
+//                initStream(strm: &strm, key: &key , nonce: &nonce8, indexLittleEndian: &idxBf8);
+                UInt64ToSteam(idx:nextBlockCount,strm: &strm)
+//                printStm(&strm);
                 salsa20_block(out: &strmOut, stream: &strm,tmpStrm: &strmTmp);
                 
-                curseOfStrm = (nextPostion % 64);
+                curseOfStrm = (nextPostion & 63); // % 64
                 let stepSize = min(64 - curseOfStrm,sizeLeft);
                 
                 let inbf = inData.bindMemory(to: UInt8.self, capacity: size);
@@ -258,7 +285,7 @@ public class Salsa20{
                 
                 curseOfData += Int(stepSize)
                 nextPostion += stepSize;
-                nextBlockCount = nextPostion/64 ;
+                nextBlockCount = nextPostion >> 6 ;
                 
                 sizeLeft -= stepSize;
             }
@@ -277,7 +304,7 @@ public class Salsa20{
                 }
                 initStream(strm: &strm, key: &key, nonce: &nonce8, indexLittleEndian: &idxBf8);
                 salsa20_block(out: &strmOut, stream: &strm,tmpStrm: &strmTmp);
-                
+                    
                 for n in 0..<8{
                     nonce8[n] = nonceArray[n+16];
                 }
@@ -288,7 +315,7 @@ public class Salsa20{
                 salsa20_block(out: &strmOut, stream: &strm,tmpStrm: &strmTmp);
                 
                 
-                curseOfStrm = (nextPostion % 64);
+                curseOfStrm = (nextPostion & 63);
                 let stepSize = min(64 - curseOfStrm,sizeLeft);
                 
                 let inbf = inData.bindMemory(to: UInt8.self, capacity: size);
@@ -301,7 +328,7 @@ public class Salsa20{
                 
                 curseOfData += Int(stepSize)
                 nextPostion += stepSize;
-                nextBlockCount = nextPostion/64 ;
+                nextBlockCount = nextPostion >> 6 ;
                 
                 sizeLeft -= stepSize;
             }
@@ -432,6 +459,25 @@ public class Salsa20{
         
         
     }
+    func printStm(_ s:inout SaBuffer,_ msg:String = "",fn:String = #function){
+        Salsa20.printStm(&s,msg,fn:fn)
+    }
+    static func printStm(_ s:inout SaBuffer,_ msg:String = "",fn:String = #function){
+        var i = 0 ;
+        print("----\(fn)-----" + msg);
+        
+        var str = ""
+        while i < s.count{
+            let str1 = String(format: "%02x%02x%02x%02x", s[i],s[i + 1],s[i + 2],s[i + 3])
+            str += str1 + " "
+            i += 4;
+            
+            if(i % 16 == 0){
+                str += "\n"
+            }
+        }
+        print(str);
+    }
     
     #if DEBUG
     static func testEnc(){
@@ -497,22 +543,7 @@ public class Salsa20{
         
     }
     
-    static func printStm(_ s:inout SaBuffer){
-        var i = 0 ;
-        print("---------");
-        
-        var str = ""
-        while i < s.count{
-            let str1 = String(format: "%02x%02x%02x%02x", s[i],s[i + 1],s[i + 2],s[i + 3])
-            str += str1 + " "
-            i += 4;
-            
-            if(i % 16 == 0){
-                str += "\n"
-            }
-        }
-        print(str);
-    }
+   
     
     static func testHash(){
         // https://www.iacr.org/archive/fse2008/50860470/50860470.pdf
@@ -552,9 +583,7 @@ public class Salsa20{
             }
             
             z.salsa20_block(out: &out, stream: &stm, tmpStrm: &tmp)
-            printStm(&out);
-            
-            
+             
             var tmp1 = A;
             A = A0
             A0 = tmp1
