@@ -27,12 +27,12 @@ public class Salsa20{
     
     
     typealias SaBuffer = UnsafeMutableBufferPointer<UInt8>
-    let BufferCount = 320;
+    let BufferCount = 384;
     private var encBuffer:UnsafeMutablePointer<UInt8>
     
     
-     var nextBlockCount:UInt64;
-     var nextPostion:UInt64;
+    var nextBlockCount:UInt64;
+    
     
     private var keyArrary:[UInt8];
     private var nonceArray:[UInt8];
@@ -71,11 +71,7 @@ public class Salsa20{
         }
         
         salsaType = nonce.count == 24 ? 1 : 0;
-        
-        nextPostion = 0;
         nextBlockCount = 0;
-        
-        
         
         encBuffer = UnsafeMutableRawPointer.allocate(byteCount: BufferCount, alignment: 4).bindMemory(to: UInt8.self, capacity: BufferCount);
         
@@ -114,6 +110,9 @@ public class Salsa20{
         
         msg32_hash  = UnsafeMutableBufferPointer(start:encBuffer.advanced(by: startPostion), count: 8);
         startPostion += msg32_hash.count
+        
+        leftBuff = UnsafeMutableBufferPointer(start:encBuffer.advanced(by: startPostion), count: 64);
+        startPostion += leftBuff.count
         
         
         
@@ -173,7 +172,6 @@ public class Salsa20{
     }
     
     @inline(__always) private func salsa20_block(out:inout SaBuffer,stream:inout SaBuffer,tmpStrm:inout SaBuffer,ROUNDS:Int = 20){
-        
         memcpy(tmpStrm.baseAddress, stream.baseAddress, tmpStrm.count);
         
         
@@ -250,54 +248,35 @@ public class Salsa20{
     
     
     
+    
+    var leftSize:Int = 0;
+    var leftBuff:SaBuffer
     /**
      *  the best size of data is 64 * N;
      *  inData and outData must have same size;
+     *
+     *  only encrypt chunk size = N * 64 ;
+     *  do the left on final() function
+     *
      */
-    public func update(inData: UnsafeRawPointer,outData: UnsafeMutableRawPointer,size:Int){
+    public func update(inData: UnsafeRawPointer,outData: UnsafeMutableRawPointer,size:Int,outSize:inout Int){
         guard size > 0  else{
+            outSize = 0;
             return;
         }
         
-        let size64 = UInt64(size);
-        if salsaType == 0{
-            var sizeLeft = size64;
-            var curseOfData = 0;
-            var curseOfStrm:UInt64 = 0;
-            while sizeLeft > 0{
-                
-//                UInt64ToUint8Array(idx: nextBlockCount, bf: &idxBf8)
-//                initStream(strm: &strm, key: &key , nonce: &nonce8, indexLittleEndian: &idxBf8);
+        var preLeftCount = leftSize
+        leftSize +=  size;
+        let inbf = inData.bindMemory(to: UInt8.self, capacity: size);
+        let outbf = outData.bindMemory(to: UInt8.self, capacity: size);
+        var cryptCount = 0;
+        var incryptCursor = 0;
+        while leftSize >= 64 {
+            
+            if salsaType == 0{
                 UInt64ToSteam(idx:nextBlockCount,strm: &strm)
-//                printStm(&strm);
                 salsa20_block(out: &strmOut, stream: &strm,tmpStrm: &strmTmp);
-                
-                curseOfStrm = (nextPostion & 63); // % 64
-                let stepSize = min(64 - curseOfStrm,sizeLeft);
-                
-                let inbf = inData.bindMemory(to: UInt8.self, capacity: size);
-                let oubf = outData.bindMemory(to: UInt8.self, capacity: size);
-                
-                for i in 0..<Int(stepSize){
-                    oubf[curseOfData + i] = inbf[curseOfData + i] ^ strmOut[Int(curseOfStrm) + i];
-                }
-                
-                
-                curseOfData += Int(stepSize)
-                nextPostion += stepSize;
-                nextBlockCount = nextPostion >> 6 ;
-                
-                sizeLeft -= stepSize;
-            }
-        }
-        /// XSalsa20  24 byte nonce
-        else {
-            var sizeLeft = size64;
-            var curseOfData = 0;
-            var curseOfStrm:UInt64 = 0;
-            while sizeLeft > 0{
-                
-                
+            }else{
                 for n in 0..<8{
                     nonce8[n] = nonceArray[n];
                     idxBf8[n] = nonceArray[n+8];
@@ -313,37 +292,89 @@ public class Salsa20{
                 copyXsalsakey(strm: &strmTmp, key: &key32Tmp);
                 initStream(strm: &strm, key: &key32Tmp, nonce: &nonce8, indexLittleEndian: &idxBf8);
                 salsa20_block(out: &strmOut, stream: &strm,tmpStrm: &strmTmp);
-                
-                
-                curseOfStrm = (nextPostion & 63);
-                let stepSize = min(64 - curseOfStrm,sizeLeft);
-                
-                let inbf = inData.bindMemory(to: UInt8.self, capacity: size);
-                let oubf = outData.bindMemory(to: UInt8.self, capacity: size);
-                
-                for i in 0..<Int(stepSize){
-                    oubf[curseOfData + i] = inbf[curseOfData + i] ^ strmOut[Int(curseOfStrm) + i];
+            }
+          
+            // pre left data
+            
+            var i = 0;
+            while i < 64{
+                if(preLeftCount > 0){
+                    for j in 0..<preLeftCount{
+                        outbf[j] = leftBuff[j] ^ strmOut[ j]
+                    }
+                    i += preLeftCount;
+                    preLeftCount = 0;
                 }
                 
+                outbf[i + cryptCount] = inbf[incryptCursor] ^ strmOut[ i];
+                incryptCursor += 1;
                 
-                curseOfData += Int(stepSize)
-                nextPostion += stepSize;
-                nextBlockCount = nextPostion >> 6 ;
-                
-                sizeLeft -= stepSize;
+                i += 1;
             }
+            
+            
+            
+            cryptCount += 64;
+            leftSize -= 64;
+            nextBlockCount += 1;
         }
+        
+        outSize = cryptCount
+        
+        
+        /// copy left to left buffer
+   
+        if(leftSize > 0){
+            memcpy(leftBuff.baseAddress!.advanced(by: preLeftCount), inData.advanced(by: incryptCursor), leftSize - preLeftCount);
+        }
+        
     }
     
     
     public func reset(){
-        nextPostion = 0;
+        leftSize = 0;
         nextBlockCount = 0;
     }
     
-    public func final(){
-        nextPostion = 0;
-        nextBlockCount = 0;
+    public func final(outData: UnsafeMutableRawPointer,outSize:inout Int){
+        if(leftSize == 0){
+            outSize = 0;
+            reset()
+            clean()
+            return;
+        }
+        
+        if salsaType == 0{
+            UInt64ToSteam(idx:nextBlockCount,strm: &strm)
+            salsa20_block(out: &strmOut, stream: &strm,tmpStrm: &strmTmp);
+        }else{
+            for n in 0..<8{
+                nonce8[n] = nonceArray[n];
+                idxBf8[n] = nonceArray[n+8];
+            }
+            initStream(strm: &strm, key: &key, nonce: &nonce8, indexLittleEndian: &idxBf8);
+            salsa20_block(out: &strmOut, stream: &strm,tmpStrm: &strmTmp);
+                
+            for n in 0..<8{
+                nonce8[n] = nonceArray[n+16];
+            }
+            
+            UInt64ToUint8Array(idx: nextBlockCount, bf: &idxBf8)
+            copyXsalsakey(strm: &strmTmp, key: &key32Tmp);
+            initStream(strm: &strm, key: &key32Tmp, nonce: &nonce8, indexLittleEndian: &idxBf8);
+            salsa20_block(out: &strmOut, stream: &strm,tmpStrm: &strmTmp);
+        }
+        
+        let inbf = leftBuff
+        let oubf = outData.bindMemory(to: UInt8.self, capacity: leftSize);
+        
+        for i in 0..<leftSize {
+            let msk = strmOut[ i];
+            oubf[i] = inbf[i] ^ msk
+        }
+        
+        outSize = leftSize;
+        reset()
         clean()
     }
     
@@ -449,9 +480,16 @@ public class Salsa20{
             outData.withUnsafeMutableBytes { bfOut in
                 let sa = try! Salsa20(key: key , nonce: nonce)
                 
-                sa.update(inData: bfMsg.baseAddress!, outData: bfOut.baseAddress!, size: bfOut.count);
+                var outSize = 0;
+                sa.update(inData: bfMsg.baseAddress!, outData: bfOut.baseAddress!, size: bfOut.count,outSize: &outSize);
                 
-                sa.final();
+                if(outSize == bfOut.count){
+                    sa.clean();
+                }else{
+                    sa.final(outData: bfOut.baseAddress!.advanced(by: outSize), outSize: &outSize);
+                }
+                
+                
             }
         }
         
@@ -478,155 +516,7 @@ public class Salsa20{
         }
         print(str);
     }
-    
-    #if DEBUG
-    static func testEnc(){
-        let txt = " 34567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
-        
-        
-        let key = "12345678901234567890123456789012".map {$0.asciiValue!};
-        let nonce32 = "123456781234567812345678".map {$0.asciiValue!};
-        let nonce8 = "12345671".map {$0.asciiValue!};
-        var nonce = nonce8
-        
-        var bf = [UInt8](repeating: 0, count: 5000)
-        randomize(&bf);
-        var data = Data(bytes: bf , count: bf.count);
-        var outData = data;
-        var outData1 = data;
-        var keydata =  Data(bytes: key , count: key.count);
-        
-        
-        let sa = try! Salsa20(key: key , nonce: nonce);
-        
-        data.withUnsafeBytes { bfMsg in
-            outData1.withUnsafeMutableBytes { bfOut  in
-                var k = 0;
-                while k < bfOut.count {
-                    var step = Int(arc4random_uniform(80));
-                    step = min(step,bfOut.count - k);
-                    sa.update(inData: bfMsg.baseAddress!.advanced(by: k), outData: bfOut.baseAddress!.advanced(by: k), size: step)
-                     
-                    k += step;
-                }
-            }
-        }
-        
-        sa.reset()
-        
-        
-        try! Salsa20.sa_crypt(msg: &data, keyData: &keydata, outData: &outData, nonce: &nonce)
-        
-        print("enc",outData1 == outData)
-        
-        
-        
-        var dataDec = outData1;
-        
-        dataDec.withUnsafeMutableBytes { bfDec in
-            outData1.withUnsafeBytes { bfEnc  in
-                var k = 0;
-                while k < bfEnc.count {
-                    var step = Int(arc4random_uniform(80));
-                    step = min(step,bfEnc.count - k);
-                    sa.update(inData: bfEnc.baseAddress!.advanced(by: k), outData: bfDec.baseAddress!.advanced(by: k), size: step)
-                     
-                    k += step;
-                }
-            }
-        }
-        
-        
-        print("dec",dataDec == data)
-        
-//        print(String(data: dataDec, encoding: .utf8))
-        
-    }
-    
-   
-    
-    static func testHash(){
-        // https://www.iacr.org/archive/fse2008/50860470/50860470.pdf
-        let  key = [UInt8](repeating: 0, count: 32);
-        let  nonce  = [UInt8](repeating: 0, count: 8);
-        
-        do {
-            let z = try Salsa20(key: key, nonce: nonce);
-            print(33)
-            var out = z.strmOut
-            var tmp = z.strmTmp
-            var stm = z.strm
-            
-            var A = 3 as UInt32;
-            var A0 = A + (1 << 31)
-            
-            stm.baseAddress?.withMemoryRebound(to: UInt32.self, capacity: 16) { bf in
-                bf[0] = A;
-                bf[1] = A0;
-                bf[2] = A;
-                bf[3] = A0;
-                
-                bf[4] = A;
-                bf[5] = A0;
-                bf[6] = A;
-                bf[7] = A0;
-                
-                bf[8] = A;
-                bf[9] = A0;
-                bf[10] = A;
-                bf[11] = A0;
-                
-                bf[12] = A;
-                bf[13] = A0;
-                bf[14] = A;
-                bf[15] = A0;
-            }
-            
-            z.salsa20_block(out: &out, stream: &stm, tmpStrm: &tmp)
-             
-            var tmp1 = A;
-            A = A0
-            A0 = tmp1
-            
-            stm.baseAddress?.withMemoryRebound(to: UInt32.self, capacity: 16) { bf in
-                bf[0] = A;
-                bf[1] = A0;
-                bf[2] = A;
-                bf[3] = A0;
-                
-                bf[4] = A;
-                bf[5] = A0;
-                bf[6] = A;
-                bf[7] = A0;
-                
-                bf[8] = A;
-                bf[9] = A0;
-                bf[10] = A;
-                bf[11] = A0;
-                
-                bf[12] = A;
-                bf[13] = A0;
-                bf[14] = A;
-                bf[15] = A0;
-            }
-            
-            z.salsa20_block(out: &out, stream: &stm, tmpStrm: &tmp)
-            printStm(&out);
-            
-            print("Hash Collison");
-            
-            
-        }
-        catch let e{
-            print(e)
-        }
-         
-    }
-    static func test(){
-        testEnc()
-    }
-    
-    #endif
+
 }
 
 

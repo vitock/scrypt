@@ -66,14 +66,6 @@ public class Scrypt{
     }
     
     
-    func printData(p:UnsafeRawPointer,size:Int,msg:String = ""){
-        let d = Data(bytes: p , count: size);
-        print(msg,size,d.tohexString());
-    }
-    
-   
-    
-    
     @inline(__always)  func ROMix(block:UnsafeMutableRawPointer,outX:UnsafeMutableRawPointer,index:Int){
         
         let idx = 1 << lgIteration;
@@ -91,7 +83,7 @@ public class Scrypt{
             memcpy(bfVi, X , blockSize);
             BlockMix(block:X,out: X,sa:sa,tmpBf: bfX,index: index);
         }
-        sa.final()
+        sa.clean();
          
         let shift = (32 - lgIteration);
         for _ in 0..<idx{
@@ -180,13 +172,3 @@ public class Scrypt{
     }
 }
  
-extension Data {
-    func tohexString() -> String{
-        let hexAlphabet = Array("0123456789abcdef".unicodeScalars)
-        let rd = reduce(into: "".unicodeScalars) { r, e  in
-            r.append(hexAlphabet[Int(e / 0x10)])
-            r.append(hexAlphabet[Int(e % 0x10)])
-        };
-        return String(rd);
-    }
-}

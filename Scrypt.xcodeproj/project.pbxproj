@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C43B06BE2802EABF004E55FC /* Test.swift in Sources */ = {isa = PBXBuildFile; fileRef = C43B06BD2802EABF004E55FC /* Test.swift */; };
 		C4564B9427F294190093EF15 /* salsa20.swift in Sources */ = {isa = PBXBuildFile; fileRef = C49B281827F1A000003CC735 /* salsa20.swift */; };
 		C456C52327F3412A005BE400 /* salsa20.swift in Headers */ = {isa = PBXBuildFile; fileRef = C49B281827F1A000003CC735 /* salsa20.swift */; };
 		C49B281227F19FE1003CC735 /* Scrypt.h in Headers */ = {isa = PBXBuildFile; fileRef = C49B281127F19FE1003CC735 /* Scrypt.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -36,6 +37,7 @@
 		2F94DF5DA864C1179466095E /* Pods-Scrypt.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Scrypt.release.xcconfig"; path = "Target Support Files/Pods-Scrypt/Pods-Scrypt.release.xcconfig"; sourceTree = "<group>"; };
 		A84778748EA64878516E0D42 /* Pods-x.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-x.debug.xcconfig"; path = "Target Support Files/Pods-x/Pods-x.debug.xcconfig"; sourceTree = "<group>"; };
 		BD570D257D18623CFE995354 /* Pods-Scrypt.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Scrypt.debug.xcconfig"; path = "Target Support Files/Pods-Scrypt/Pods-Scrypt.debug.xcconfig"; sourceTree = "<group>"; };
+		C43B06BD2802EABF004E55FC /* Test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Test.swift; sourceTree = "<group>"; };
 		C49B280E27F19FE1003CC735 /* Scrypt.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Scrypt.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		C49B281127F19FE1003CC735 /* Scrypt.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Scrypt.h; sourceTree = "<group>"; };
 		C49B281827F1A000003CC735 /* salsa20.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = salsa20.swift; sourceTree = "<group>"; };
@@ -103,6 +105,7 @@
 				C49B281127F19FE1003CC735 /* Scrypt.h */,
 				C49B281827F1A000003CC735 /* salsa20.swift */,
 				C4CCDE0A27F465D10033E758 /* Scrypt.swift */,
+				C43B06BD2802EABF004E55FC /* Test.swift */,
 			);
 			path = Scrypt;
 			sourceTree = "<group>";
@@ -287,6 +290,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C4CCDE0C27F465D10033E758 /* Scrypt.swift in Sources */,
+				C43B06BE2802EABF004E55FC /* Test.swift in Sources */,
 				C4564B9427F294190093EF15 /* salsa20.swift in Sources */,
 				C49B282127F1A2D7003CC735 /* main.swift in Sources */,
 			);
